@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Orders - Glass & Mirror CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Orders</h1>
+        {% if user.role in 'admin,sales' %}
+        <a href="{% url 'order_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> New Order
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Order #</th>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Payment</th>
+                            <th>Total</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td>{{ order.id }}</td>
+                            <td>{{ order.customer.name }}</td>
+                            <td>{{ order.order_date|date }}</td>
+                            <td>
+                                <span class="badge bg-{{ order.status|yesno:'success,warning,danger' }}">
+                                    {{ order.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ order.payment_status|yesno:'success,warning,danger' }}">
+                                    {{ order.get_payment_status_display }}
+                                </span>
+                            </td>
+                            <td>${{ order.total_amount|floatformat:2 }}</td>
+                            <td>
+                                <a href="{% url 'order_detail' order.pk %}" class="btn btn-sm btn-info">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if user.role in 'admin,sales' and order.status == 'pending' %}
+                                <a href="{% url 'order_edit' order.pk %}" class="btn btn-sm btn-warning">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'order_receipt' order.pk %}" class="btn btn-sm btn-secondary" target="_blank">
+                                    <i class="bi bi-receipt"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center">No orders found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

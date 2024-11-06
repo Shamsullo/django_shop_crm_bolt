@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load crispy_forms_tags %}
+
+{% block title %}Order #{{ order.id }} - Glass & Mirror CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Order #{{ order.id }}</h1>
+        <div>
+            {% if user.role in 'admin,sales' and order.status == 'pending' %}
+            <a href="{% url 'order_edit' order.pk %}" class="btn btn-warning">
+                <i class="bi bi-pencil"></i> Edit
+            </a>
+            {% endif %}
+            <a href="{% url 'order_receipt' order.pk %}" class="btn btn-secondary" target="_blank">
+                <i class="bi bi-receipt"></i> Receipt
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Order Information</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Customer</dt>
+                        <dd class="col-sm-8">
+                            <a href="{% url 'customer_detail' order.customer.pk %}">
+                                {{ order.customer.name }}
+                            </a>
+                        </dd>
+
+                        <dt class="col-sm-4">Sales Person</dt>
+                        <dd class="col-sm-8">{{ order.sales_person.get_full_name }}</dd>
+
+                        <dt class="col-sm-4">Order Date</dt>
+                        <dd class="col-sm-8">{{ order.order_date|date }}</dd>
+
+                        <dt class="col-sm-4">Status</dt>
+                        <dd class="col-sm-8">
+                            {% if user.role in 'admin,sales' %}
+                            <select class="form-select form-select-sm" id="orderStatus" data-order-id="{{ order.pk }}">
+                                {% for value, label in order.STATUS_CHOICES %}
+                                <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <span class="badge bg-{{ order.status|yesno:'success,warning,danger' }}">
+                                {{ order.get_status_display }}
+                            </span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4">Payment</dt>
+                        <dd class="col-sm-8">
+                            {% if user.role in 'admin,accountant' %}
+                            <select class="form-select form-select-sm" id="paymentStatus" data-order-id="{{ order.pk }}">
+                                {% for value, label in order.PAYMENT_STATUS %}
+                                <option value="{{ value }}" {% if order.payment_status == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <span class="badge bg-{{ order.payment_status|yesno:'success,warning,danger' }}">
+                                {{ order.get_payment_status_display }}
+                            </span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4">Total Amount</dt>
+                        <dd class="col-sm-8">${{ order.total_amount|floatformat:2 }}</dd>
+
+                        <dt class="col-sm-4">Paid Amount</dt>
+                        <dd class="col-sm-8">
+                            {% if user.role in 'admin,accountant' %}
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control form-control-sm" id="paidAmount"
+                                    value="{{ order.paid_amount }}" step="0.01" min="0" max="{{ order.total_amount }}">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" id="updatePaidAmount">
+                                    Update
+                                </button>
+                            </div>
+                            {% else %}
+                            ${{ order.paid_amount|floatformat:2 }}
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            {% if order.notes %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Notes</h5>
+                </div>
+                <div class="card-body">
+                    {{ order.notes|linebreaks }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Order Items</h5>
+                    {% if user.role in 'admin,sales' and order.status == 'pending' %}
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                        <i class="bi bi-plus-lg"></i> Add Item
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Dimensions</th>
+                                    <th>Unit Price</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order.items.all %}
+                                <tr>
+                                    <td>{{ item.product.name }}</td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>
+                                        {% if item.width and item.height %}
+                                        {{ item.width }} x {{ item.height }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>${{ item.unit_price|floatformat:2 }}</td>
+                                    <td>${{ item.total_price|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Services</h5>
+                    {% if user.role in 'admin,sales' and order.status == 'pending' %}
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addServiceModal">
+                        <i class="bi bi-plus-lg"></i> Add Service
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Pattern</th>
+                                    <th>Status</th>
+                                    <th>Assigned To</th>
+                                    <th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for service in order.services.all %}
+                                <tr>
+                                    <td>{{ service.service.name }}</td>
+                                    <td>{{ service.pattern.name|default:"-" }}</td>
+                                    <td>
+                                        {% if user.role == 'workshop' and service.assigned_to == request.user %}
+                                        <select class="form-select form-select-sm service-status" 
+                                                data-order-id="{{ order.pk }}"
+                                                data-service-id="{{ service.pk }}">
+                                            {% for value, label in service.STATUS_CHOICES %}
+                                            <option value="{{ value }}" {% if service.status == value %}selected{% endif %}>
+                                                {{ label }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        {% else %}
+                                        <span class="badge bg-{{ service.status|yesno:'success,warning,info' }}">
+                                            {{ service.get_status_display }}
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ service.assigned_to.get_full_name|default:"-" }}</td>
+                                    <td>${{ service.price|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Item Modal -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    {{ item_form|crispy }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_item" class="btn btn-primary">Add Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Service Modal -->
+<div class="modal fade" id="addServiceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Service</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    {{ service_form|crispy }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_service" class="btn btn-primary">Add Service</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Order status update
+    const orderStatus = document.getElementById('orderStatus');
+    if (orderStatus) {
+        orderStatus.addEventListener('change', function() {
+            const orderId = this.dataset.orderId;
+            fetch(`/orders/${orderId}/update-status/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: `status=${this.value}`
+            });
+        });
+    }
+
+    // Payment status update
+    const paymentStatus = document.getElementById('paymentStatus');
+    if (paymentStatus) {
+        paymentStatus.addEventListener('change', function() {
+            const orderId = this.dataset.orderId;
+            fetch(`/orders/${orderId}/update-payment/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: `payment_status=${this.value}`
+            });
+        });
+    }
+
+    // Paid amount update
+    const updatePaidAmount = document.getElementById('updatePaidAmount');
+    if (updatePaidAmount) {
+        updatePaidAmount.addEventListener('click', function() {
+            const orderId = document.getElementById('paymentStatus').dataset.orderId;
+            const paidAmount = document.getElementById('paidAmount').value;
+            fetch(`/orders/${orderId}/update-payment/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: `paid_amount=${paidAmount}`
+            });
+        });
+    }
+
+    // Service status update
+    document.querySelectorAll('.service-status').forEach(select => {
+        select.addEventListener('change', function() {
+            const orderId = this.dataset.orderId;
+            const serviceId = this.dataset.serviceId;
+            fetch(`/orders/${orderId}/services/${serviceId}/update/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: `status=${this.value}`
+            });
+        });
+    });
+});
+</script>
+{% endblock %}
